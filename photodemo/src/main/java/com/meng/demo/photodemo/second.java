@@ -32,6 +32,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
+import static android.os.Environment.getExternalStorageDirectory;
 import static android.provider.MediaStore.ACTION_IMAGE_CAPTURE;
 
 
@@ -40,28 +41,35 @@ public class second extends AppCompatActivity {
     private static final String TAG = second.class.getSimpleName();
     private Button btn;
     private Button btn1;
+    private Button btn2;
     private ImageView iv1;
     private ImageView iv2;
 
-    String srcPath = Environment.getExternalStorageDirectory().getAbsolutePath()+"/head.jpg";
-    String targetPath = Environment.getExternalStorageDirectory().getAbsolutePath()+"/face.jpg";
-    String targetPath1 = Environment.getExternalStorageDirectory().getAbsolutePath()+"/back.jpg";
+    String srcPath = getExternalStorageDirectory().getAbsolutePath()+"/head.jpg";
+    String targetPath = getExternalStorageDirectory().getAbsolutePath()+"/face.jpg";
+    String targetPath1 = getExternalStorageDirectory().getAbsolutePath()+"/back.jpg";
+
+    private int screenWidth;
+    private int screenHeight;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_second);
 
+        getScreenHW();
+
         iv1 = (ImageView) findViewById(R.id.iv1);
         iv2 = (ImageView) findViewById(R.id.iv2);
         btn = (Button) findViewById(R.id.button);
         btn1 = (Button) findViewById(R.id.button1);
+        btn2= (Button) findViewById(R.id.button2);
         btn.setOnClickListener(new View.OnClickListener() {//打开相机
             @Override
             public void onClick(View view) {
                 Intent intent2 = new Intent(ACTION_IMAGE_CAPTURE);
                 intent2.putExtra(MediaStore.EXTRA_OUTPUT,
-                        Uri.fromFile(new File(Environment.getExternalStorageDirectory(), "head.jpg")));
+                        Uri.fromFile(new File(getExternalStorageDirectory(), "head.jpg")));
                 startActivityForResult(intent2, 2);// 采用ForResult打开
             }
         });
@@ -73,6 +81,24 @@ public class second extends AppCompatActivity {
                 startActivityForResult(intent1, 1);
             }
         });
+
+        btn2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String srcPath = Environment.getExternalStorageDirectory()+"/dog.jpg";
+                String newPath = Environment.getExternalStorageDirectory()+"/smalldog.jpg";
+                samplingCompress(srcPath,newPath);
+            }
+        });
+    }
+
+    /**
+     * 获取屏幕的宽高
+     */
+    private void getScreenHW() {
+        screenWidth = getWindowManager().getDefaultDisplay().getWidth();
+        screenHeight = getWindowManager().getDefaultDisplay().getHeight();
+        LogUtils.e(screenWidth+":"+screenHeight);
     }
 
     @Override
@@ -145,7 +171,8 @@ public class second extends AppCompatActivity {
 
         File file1 = new File(srcPath);
         if(file1.exists()){
-            compress(file1,targetPath);
+//            compress(file1,targetPath);
+            samplingCompress(srcPath,targetPath);
         }
         File file = new File(targetPath);
         if(file.exists()){
@@ -233,7 +260,7 @@ public class second extends AppCompatActivity {
         FileOutputStream fos = null;
         try {
             LogUtils.e("图片大小："+baos.toByteArray().length);
-            fos = new FileOutputStream(Environment.getExternalStorageDirectory().getAbsolutePath()+"/head1.jpg");
+            fos = new FileOutputStream(getExternalStorageDirectory().getAbsolutePath()+"/head1.jpg");
             baos.writeTo(fos);//将流写入文件
         } catch (IOException e) {
             // TODO Auto-generated catch block
@@ -295,12 +322,99 @@ public class second extends AppCompatActivity {
         int samPle = Math.max(widthScale,heightScale);
         opts.inSampleSize = 2;
         opts.inJustDecodeBounds = false;
-        Bitmap bitmap = BitmapFactory.decodeFile(Environment.getExternalStorageDirectory().getAbsolutePath()+"/head2.jpg", opts);
+        Bitmap bitmap = BitmapFactory.decodeFile(getExternalStorageDirectory().getAbsolutePath()+"/head2.jpg", opts);
         try {
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, new FileOutputStream(new File(Environment.getExternalStorageDirectory().getAbsolutePath()+"/head2.jpeg")));
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, new FileOutputStream(new File(getExternalStorageDirectory().getAbsolutePath()+"/head2.jpeg")));
         } catch (FileNotFoundException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
+        }
+    }
+
+    public  void compress2(File srcFilePath ,File newFilePath){
+        if(srcFilePath == null || !srcFilePath.exists() || srcFilePath.isDirectory())return;
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        // 设置为ture只获取图片大小
+        opts.inJustDecodeBounds = true;
+        opts.inPreferredConfig = Bitmap.Config.ARGB_8888;
+        // 获取到屏幕对象
+        Display display = getWindowManager().getDefaultDisplay();
+        // 获取到屏幕的真是宽和高
+        int screenWidth = display.getWidth();
+        int screenHeight = display.getHeight();
+        // 计算缩放比例
+        int widthScale = opts.outWidth /screenWidth;
+        int heightScale = opts.outHeight /screenHeight;
+        int samPle = Math.max(widthScale,heightScale);
+        opts.inSampleSize = samPle;
+
+        opts.inJustDecodeBounds = false;
+        Bitmap bitmap = BitmapFactory.decodeFile(srcFilePath.getAbsolutePath(), opts);
+        FileOutputStream fos = null;
+        try {
+            if(newFilePath == null || !newFilePath.exists() || newFilePath.isDirectory()) {
+                LogUtils.e("新文件路径不对");return;
+            }
+            fos = new FileOutputStream(new File(newFilePath.getAbsolutePath()));
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100,fos);
+            CloseUtils.closeIO(fos);
+            LogUtils.e("length:"+newFilePath.length());
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+            CloseUtils.closeIO(fos);
+        }
+    }
+
+
+    /**
+     * 采样压缩图片
+     * 按屏幕分辨率对图片进行压缩
+     */
+    private void samplingCompress(String srcPath,String newPath){
+        BitmapFactory.Options opt = new BitmapFactory.Options();
+        opt.inJustDecodeBounds = true;
+        Bitmap bitmap = BitmapFactory.decodeFile(srcPath,opt);
+        if(opt.outHeight > screenHeight || opt.outWidth > screenWidth){
+            int wScale = opt.outWidth / screenWidth;
+            int hScale = opt.outHeight / screenHeight;
+
+            opt.inSampleSize = Math.max(wScale,hScale);
+            opt.inJustDecodeBounds = false;
+        }
+        bitmap = BitmapFactory.decodeFile(srcPath, opt);
+        qualityCompress(bitmap,newPath);
+
+    }
+
+    /**
+     * 按照质量压缩图片
+     * @param bitmap
+     * @param compressPath
+     */
+    private void qualityCompress(Bitmap bitmap,String compressPath){
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        int pos= 100;
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);//质量压缩方法，这里100表示不压
+        Log.i("TAG1", baos.size()/1024+"k=============="+pos);
+        while(baos.size()/1024>300) {
+            Log.i("TAG2", baos.size()/1024+"k=============="+pos);
+            pos -=10;
+            baos.reset();
+            bitmap.compress(Bitmap.CompressFormat.JPEG, pos, baos);
+        }
+        FileOutputStream fos = null;
+        try {
+            LogUtils.e("图片大小："+baos.toByteArray().length/1024 +"K");
+            fos = new FileOutputStream(compressPath);
+            baos.writeTo(fos);//将流写入文件
+
+            CloseUtils.closeIO(fos);
+            CloseUtils.closeIO(baos);
+        } catch (IOException e) {
+            e.printStackTrace();
+            CloseUtils.closeIO(fos);
+            CloseUtils.closeIO(baos);
         }
     }
 
